@@ -1,2 +1,2 @@
-# uebs-generative-ai
-Analysis of data from UEBS Generative AI project
+University of Edinburgh Generative AI Project
+Analysis of data from the University of Edinburgh Business School project titled: Generative AI in education: An analysis of student acceptance, uses and outcomes
