@@ -1,0 +1,28 @@
+
+```{r loading packages and data}
+# loading packages
+library(tidyverse)
+library(here) # enables relative file paths
+library(haven) # for reading in foreign file formats
+library(skimr) # provides extensive set of summary stats
+
+
+
+
+
+
+
+# read in data
+
+## clearned stata data - we want to create something similar in r
+stata_cleaned <- read_dta(here("stata", "UG_Cleaned_Dataset.dta")) 
+
+## raw data
+
+
+```
+
+```{r skimming data}
+skim(stata_cleaned)
+```
+
