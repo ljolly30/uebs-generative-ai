@@ -3,26 +3,57 @@
 # loading packages
 library(tidyverse)
 library(here) # enables relative file paths
-library(haven) # for reading in foreign file formats
+library(haven) # for reading in foreign (e.g. Stata) file formats
 library(skimr) # provides extensive set of summary stats
-
-
-
-
-
+library(tidyr) # makes sure code conforms to Tidyverse style guidelines
+library(janitor) # for making nice variable names
+library(gtsummary) # for making nice summary tables
+library(car)
+library(ggthemes) # for accesing more themes
+library(styler)
 
 
 # read in data
+## survey
+ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_February 14, 2024_15.46.csv"))
+pg_survey <- read_csv(here("data", "survey", ""))
 
-## clearned stata data - we want to create something similar in r
-stata_cleaned <- read_dta(here("stata", "UG_Cleaned_Dataset.dta")) 
+# experiment
+ug_exp <- read_csv(here("data", "experiment", "Submission_February 14, 2024_15.45.csv"))
 
-## raw data
+pg_exp <- read_csv(here("data", "experiment", "GenAI PTAS Submission Computer Workshop MSc One T_March 13, 2024_15.25.csv"), col_names = T) %>% 
+  slice(-1,-2,-3) %>% # get ride of 1st-3rd rows %
+  clean_names() %>%
+  rename(
+    duration_s = duration_in_seconds,
+    userid = response_id,
+    # q4 = q4_12,
+    # q6 = q6_14,
+    # q2 = q2_16,
+    # q3_first_click = q3_first_click_17,
+    # q3_last_click = q3_last_click_18,
+    # q3_page_submit = q3_page_submit_19,
+    # q3_click_count = q3_click_count_20,
+  ) %>% 
+  mutate(
+    start_date = as_datetime(start_date),
+    end_date = as_datetime(end_date),
+    recorded_date = as_datetime(recorded_date),
+    finished = as.factor(finished),
+    across(c(5,17:24, 29:32, 38:41, 44:47, 49:52, 54:61, 64:67), as.numeric)
+  ) %>% 
+  relocate(userid)
+  
+## cleaned stata data - we want to create something similar in r
+stata_cleaned <- read_dta(here("stata", "UG_Cleaned_Dataset.dta"))
 
-
+colnames(pg_exp)
 ```
 
 ```{r skimming data}
 skim(stata_cleaned)
 ```
 
+# Experiment Data
+```{r organize and clean UG experiment data}
+```
