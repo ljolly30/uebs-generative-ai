@@ -1,59 +1,116 @@
 
 ```{r loading packages and data}
 # loading packages
-library(tidyverse)
+library(tidyverse) # for general data analysis
 library(here) # enables relative file paths
 library(haven) # for reading in foreign (e.g. Stata) file formats
 library(skimr) # provides extensive set of summary stats
-library(tidyr) # makes sure code conforms to Tidyverse style guidelines
-library(janitor) # for making nice variable names
-library(gtsummary) # for making nice summary tables
-library(car)
-library(ggthemes) # for accesing more themes
-library(styler)
+library(janitor) # for making nice variable names (snake_case)
+library(ggthemes) # for accessing more themes
+library(styler) # makes sure code conforms to tidyverse style guidelines
 
-
-# read in data
-## survey
-ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_February 14, 2024_15.46.csv"))
-pg_survey <- read_csv(here("data", "survey", ""))
-
-# experiment
-ug_exp <- read_csv(here("data", "experiment", "Submission_February 14, 2024_15.45.csv"))
-
-pg_exp <- read_csv(here("data", "experiment", "GenAI PTAS Submission Computer Workshop MSc One T_March 13, 2024_15.25.csv"), col_names = T) %>% 
-  slice(-1,-2,-3) %>% # get ride of 1st-3rd rows %
-  clean_names() %>%
-  rename(
-    duration_s = duration_in_seconds,
-    userid = response_id,
-    # q4 = q4_12,
-    # q6 = q6_14,
-    # q2 = q2_16,
-    # q3_first_click = q3_first_click_17,
-    # q3_last_click = q3_last_click_18,
-    # q3_page_submit = q3_page_submit_19,
-    # q3_click_count = q3_click_count_20,
-  ) %>% 
-  mutate(
-    start_date = as_datetime(start_date),
-    end_date = as_datetime(end_date),
-    recorded_date = as_datetime(recorded_date),
-    finished = as.factor(finished),
-    across(c(5,17:24, 29:32, 38:41, 44:47, 49:52, 54:61, 64:67), as.numeric)
-  ) %>% 
-  relocate(userid)
-  
 ## cleaned stata data - we want to create something similar in r
 stata_cleaned <- read_dta(here("stata", "UG_Cleaned_Dataset.dta"))
-
-colnames(pg_exp)
 ```
 
 ```{r skimming data}
 skim(stata_cleaned)
 ```
 
+# Survey Data
+```{r UG Survey}
+# read in and wrangle data
+ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.24.csv")) %>% # this one has more rows than one from Feb, so I assume it's the right one
+  clean_names() %>% # put names in snake_case
+  filter(distribution_channel == "anonymous") %>% # filter for actual ppt data
+  type_convert() %>% # let tidyverse guess variable types - does pretty good job
+  rename( # shorter variable names
+    duration_s = duration_in_seconds,
+    userid = response_id,
+    # Jordana's renaming of vars
+    participinfo = q6,
+    consent = q7,
+    entexp = q14,
+    xposent = q16,
+    prog = q17,
+    cse1 = q21_1,
+    cse2 = q22_1,
+    cse3 = q23_1,
+    pinno1 = q26_1,
+    pinno2 = q27_1,
+    pinno3 = q28_1,
+    pl1 = q31_1,
+    cl1 = q32_1,
+    cl2 = q33_1,
+    pl2 = q34_1,
+    cl3 = q35_1,
+    ml1 = q36_1,
+    ml2 = q37_1,
+    pl3 = q38_1,
+    ml3 = q39_1,
+    frequse = q40,
+    useplan = q41,
+    useprof = q42,
+    useacad = q43,
+    se1 = q46_1,
+    se2 = q47_1,
+    se3 = q48_1,
+    gender = q50,
+    ageoriginal = q51,
+    # my own renaming
+    country = q52 # create variable for home country
+  ) %>%
+  mutate(
+    gender = factor(gender)
+  ) %>%
+  filter(progress > 87) %>% # filter for completion rate > 87% (Jordana's cutoff)
+  select(-c(q8)) # drop variable for interviews
+
+# q14 recoding- entrepreneurial experience
+ug_survey <- ug_survey %>%
+  mutate(
+    entxn = ifelse(entexp %in% c("I have experience as an entrepreneur.", "I have experience as a business owner."), "entrepreneurial experience – narrower", 0),
+    entxb = ifelse(entexp %in% c("I have experience as an entrepreneur.", "I have experience as a business owner.", "I have experience as a self-employed person."), "entrepreneurial experience –broader", 0),
+    .after = entexp
+  )
+
+# q16 recoding - Exposure to entrepreneurship
+ug_survey <- ug_survey %>%
+  mutate(
+    xposen = ifelse(xposent %in% c("At least one of my parents has experience as entrepreneur.", "At least one of my parents has experience as business owner."), "entrepreneurial experience – narrower", 0),
+    xposeb = ifelse(xposent %in% c("At least one of my parents has experience as entrepreneur.", "At least one of my parents has experience as business owner.", "At least one of my parents has experience as a self-employed person."), "entrepreneurial experience – broader", 0),
+    .after = xposent
+  )
+
+# q17 recoding - Programme
+ug_survey
+```
+
 # Experiment Data
-```{r organize and clean UG experiment data}
+```{r UG Experiment}
+```
+
+```{r MSc Experiment}
+# read in and wrangle data
+pg_exp <- read_csv(here("data", "experiment", "MSc Experiment March 13, 2024_15.25.csv"), col_names = T) %>%
+  clean_names() %>% # put names in snake_case
+  filter(distribution_channel == "anonymous") %>% # filter for actual ppt data
+  type_convert() %>% # let tidyverse guess variable types - does pretty good job
+  rename(
+    duration_s = duration_in_seconds,
+    userid = response_id,
+  ) %>%
+  mutate(
+    start_date = as_datetime(start_date), # make a date
+    end_date = as_datetime(end_date), # "
+    recorded_date = as_datetime(recorded_date), # "
+    finished = factor(finished), # make this a factor
+    across(c(5, 17:24, 29:32, 38:41, 44:47, 49:52, 54:61, 64:67), as.numeric), # make certain variables numeric
+  ) %>%
+  rename_with(~ paste0("code_", .), 11:15) %>%
+  rename_with(~ paste0("overview_", .), 16:16) %>%
+  relocate(userid)
+
+# skim
+skim(pg_exp)
 ```
