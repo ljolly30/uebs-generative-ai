@@ -26,7 +26,6 @@ ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.2
   type_convert() %>% # let tidyverse guess variable types - does pretty good job
   rename( # shorter variable names
     duration_s = duration_in_seconds,
-    userid = response_id,
     # Jordana's renaming of vars
     participinfo = q6,
     consent = q7,
@@ -61,7 +60,9 @@ ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.2
     country = q52 # create variable for home country
   ) %>%
   mutate(
-    gender = factor(gender)
+    gender = factor(gender),
+    uk = if_else(country == "United Kingdom of Great Britain and Northern Ireland", 1, 0), # create binary variable for UK
+    .after = country
   ) %>%
   filter(progress > 87) %>% # filter for completion rate > 87% (Jordana's cutoff)
   select(-c(q8)) # drop variable for interviews
@@ -69,7 +70,9 @@ ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.2
 # q14 recoding- entrepreneurial experience
 ug_survey <- ug_survey %>%
   mutate(
+    #entrepreneurial exposure – narrower
     entxn = ifelse(entexp %in% c("I have experience as an entrepreneur.", "I have experience as a business owner."), "entrepreneurial experience – narrower", 0),
+    # entrepreneurial exposure – broader
     entxb = ifelse(entexp %in% c("I have experience as an entrepreneur.", "I have experience as a business owner.", "I have experience as a self-employed person."), "entrepreneurial experience –broader", 0),
     .after = entexp
   )
@@ -77,14 +80,112 @@ ug_survey <- ug_survey %>%
 # q16 recoding - Exposure to entrepreneurship
 ug_survey <- ug_survey %>%
   mutate(
+    # entrepreneurial exposure – narrower
     xposen = ifelse(xposent %in% c("At least one of my parents has experience as entrepreneur.", "At least one of my parents has experience as business owner."), "entrepreneurial experience – narrower", 0),
+    # entrepreneurial exposure – broader
     xposeb = ifelse(xposent %in% c("At least one of my parents has experience as entrepreneur.", "At least one of my parents has experience as business owner.", "At least one of my parents has experience as a self-employed person."), "entrepreneurial experience – broader", 0),
     .after = xposent
   )
 
 # q17 recoding - Programme
+ug_survey <- ug_survey %>%
+  mutate(
+    programme = case_when( # create variable for programme 
+      prog == "A programme at the Business School." ~ "Business programme at the business school",
+      prog %in% c("Law and Business / Psychology and Business / Economics and Management.",
+                  "Language and Business (for example, French and Business, German and Business).",
+                  "Mathematics and Business.",
+                  "I am an exchange student, but I study business in my home university.") ~ "Another programme with a business component",
+      .default = "A programme without a business component"
+    ),
+    .after = prog
+  )
+
+# q21-23 recoding - creative self-efficacy (CSE)
+ug_survey <- ug_survey %>% 
+  mutate(
+    across(c(cse1:cse3), ~ factor(., levels = c("Totally disagree", "Mostly disagree" , "Slightly disagree",   "Neutral", "Slightly agree", "Mostly agree", "Totally agree"),
+                 labels = c(1,2,3,4,5,6,7))),
+    across(c(cse1:cse3), ~ as.numeric(as.character(.))),
+    creativese = rowMeans(across(c(cse1:cse3)),na.rm = TRUE), # create variable for creative self-efficiency
+    .after = cse3
+    )
+
+# q26-28 recoding - personal innovativeness
+ug_survey <- ug_survey %>% 
+  mutate(
+    across(c(pinno1:pinno3), ~ factor(., levels = c("Totally disagree", "Mostly disagree" , "Slightly disagree",   "Neutral", "Slightly agree", "Mostly agree", "Totally agree"),
+                 labels = c(1,2,3,4,5,6,7))),
+    across(c(pinno1:pinno3), ~ as.numeric(as.character(.))),
+    persinno = rowMeans(across(c(pinno1:pinno3)),na.rm = TRUE), # create variable for personal innovativeness)
+    .after = pinno3
+    )
+
+# q31-39 - check with Raluca
+
+
+# q40 recoding - Frequency of GenAI use
+ug_survey <- ug_survey %>% 
+  mutate(
+    frequentuser = ifelse(frequse %in% c("Once or more each day.", "Several times each week."), "frequent generative AI user", 0), # create variable for frequent generative AI user
+    .after = frequse
+  )
+
+# q41-43 recoding - Frequency of GenAI use: Planning, Professional and Academic
+ug_survey <- ug_survey %>% 
+  mutate(
+    across(c(useplan:useacad), ~ factor(., levels = c("I use Generative AI quite often for this type of purpose.", "I have used Generative AI occasionally for this type of purpose." , "I have never used Generative AI for this type of purpose."),
+                 labels = c(1,2,3))),
+    across(c(useplan:useacad), ~ as.numeric(as.character(.))),
+    usecontext = rowMeans(across(c(useplan:useacad)),na.rm = TRUE), # create variable for Use In Context
+    .after = useacad
+    )
+
+# q46-48 recoding - self efficacy: confidence, mastery and expectations
+ug_survey <- ug_survey %>% 
+   mutate(
+    selfefficacy = rowMeans(across(c(se1:se3)),na.rm = TRUE), # create variable for self efficacy
+    .after = se3
+    ) # Note: didn't need to code as factor first because was already numeric
+
+# q51 recoding - age
+skim(ug_survey$ageoriginal) # ranges from 18-44
+
+ug_survey %>% 
+  count(ageoriginal) %>% 
+  arrange(desc(ageoriginal)) %>% 
+  #filter(n >= 5) %>%
+  
+  filter(n > 5) %>%
+  summarise(sum(n)/n_distinct(ug_survey$userid)*100)
+
+  #filter(ageoriginal>21) %>%
+ #filter(n >= 5) %>%
+
+# q52 recoding - country
+ug_survey %>% 
+  count(country) %>% 
+  arrange(desc(n)) %>% 
+  #filter(n > 5) %>%
+  
+  filter(n <= 5) %>%
+  summarise(sum(n))/n_distinct(ug_survey$userid)*100)
+
+  #filter(ageoriginal>21) %>%
+ #filter(n >= 5) %>%
+
+# create unique userid for merging
 ug_survey
 ```
+- qs 31-19 - check with raluca
+
+- Age: There are 14 ages (26 obs ~ 11% of data) which have five or fewer observations, ranging from 18-44. The vast majority of respondents (89.3%) are between 21-24 inclusive, so perhaps we could add a category for < 21 (2% of ppts) and >24 (8.7% of ppts)? Alternatively, I often see surveys/reports that group people into the categories:
+  - 18-24 (91.3% of our ppts)
+  - 25-34 (6.2% of our ppts)
+  - 35-44 (2.5% of our ppts)
+  
+- Country: There are 31 countries (51 obs ~ 21% of data) which have five or fewer observations. The vast majority of respondents (~79%) are from just four countries: China (46%), the UK (27%), India (3%) and the US (3%).
+
 
 # Experiment Data
 ```{r UG Experiment}
@@ -108,9 +209,7 @@ pg_exp <- read_csv(here("data", "experiment", "MSc Experiment March 13, 2024_15.
     across(c(5, 17:24, 29:32, 38:41, 44:47, 49:52, 54:61, 64:67), as.numeric), # make certain variables numeric
   ) %>%
   rename_with(~ paste0("code_", .), 11:15) %>%
-  rename_with(~ paste0("overview_", .), 16:16) %>%
-  relocate(userid)
-
+  rename_with(~ paste0("overview_", .), 16:16)
 # skim
 skim(pg_exp)
 ```
