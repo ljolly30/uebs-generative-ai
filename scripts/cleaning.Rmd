@@ -18,7 +18,9 @@ stata_cleaned <- read_dta(here("stata", "UG_Cleaned_Dataset.dta"))
 skim(stata_cleaned)
 ```
 
-# Survey Data
+# Clearning data
+
+## Survey Data
 ```{r UG Survey}
 # read in and wrangle data ####
 ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.24.csv")) %>% # this one has more rows than one from Feb, so I assume it's the right one
@@ -69,15 +71,19 @@ ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.2
   ) %>%
   mutate(
     gender = factor(gender),
+    consent = factor(consent),
     uk = if_else(hscountry == "United Kingdom of Great Britain and Northern Ireland", 1, 0), # create binary variable for UK
     across(c(id_1:id_5), ~ tolower(.)),
     .after = hscountry
   ) %>%
   mutate(
-    userid = paste0(id_1, id_2, id_3, id_4, id_5),
+    userid = paste0(id_1, id_2, id_3, id_4, id_5), #create unique userid for merging
     .before = 1
+  ) %>%
+  mutate(
+    consent = ifelse(consent == "Do not use my anonymised activity in the study.", "no", "yes")
   ) %>% 
-  filter(progress > 87) %>% # filter for completion rate > 87% (Jordana's cutoff)
+  filter(progress >= 87 & consent == "yes") %>% # filter for completion rate > 87% (Jordana's cutoff) and consenting ppts
   select(-c(interviews)) # drop variable for interviews
 
 # q14 recoding- entrepreneurial experience ####
@@ -234,7 +240,7 @@ ug_survey <- ug_survey %>%
     .after = se3
   ) # Note: didn't need to code as factor first because was already numeric
 
-# q51 recoding - age ####
+# q51 recoding - age - TBD ####
 skim(ug_survey$ageoriginal) # ranges from 18-44
 
 ug_survey %>%
@@ -248,7 +254,7 @@ ug_survey %>%
   # filter(ageoriginal>21) %>%
   # filter(n >= 5) %>%
 
-# q52 recoding - hscountry ####
+# q52 recoding - hscountry####
 ug_survey %>%
   count(hscountry) %>%
   arrange(desc(n)) %>%
@@ -272,14 +278,17 @@ ug_survey <- ug_survey %>%
   ) %>% 
   ungroup() %>% 
   mutate(
-    country_group = case_when(
-      country_n <= 5 ~ countrycode(hscountry, origin = "country.name", destination = "region"),
-      .default = hscountry),
+    country_group = factor(case_when(
+      country_n <= 5 ~ countrycode(hscountry, origin = "country.name", destination = "region"), # Takes one of the UN-defined regions
+      .default = hscountry)),
     .after = country_n
   )
 
-# create unique userid for merging ####
-skim(ug_survey)
+# check for duplicate entries ####
+ug_survey %>% 
+  count(userid) %>% 
+  filter(n>1) %>% 
+  summarise(sum(n)) # 24 duplicate entries
 ```
 - 228 unique userids
 
@@ -291,8 +300,9 @@ skim(ug_survey)
 - *HS Country:* There are 31 countries (*51 obs ~ 21% of data*) which have five or fewer observations. The vast majority of respondents (*~79%*) are from just four countries: China (*46%*), the UK (*27%*), India (*3%*) and the US (*3%*).
 
 
-# Experiment Data
+## Experiment Data
 ```{r UG Experiment}
+# read in and wrangle data ####
 ug_exp <- read_csv(here("data", "experiment", "Submission_February 14, 2024_15.45.csv")) %>% 
   clean_names() %>% # put names in snake_case
   filter(distribution_channel == "anonymous") %>% # filter for actual ppt data
@@ -309,15 +319,22 @@ ug_exp <- read_csv(here("data", "experiment", "Submission_February 14, 2024_15.4
   mutate(
     userid = paste0(id_1, id_2, id_3, id_4, id_5),
     .before = 1
-  ) 
+  ) %>% 
+  filter(progress >= 87) # filter for completion rate > 87% (Jordana's cutoff)
 
 # skim
 skim(ug_exp)
+
+# check for duplicate entries ####
+ug_exp %>% 
+  count(userid) %>% 
+  filter(n>1) %>% 
+  summarise(sum(n)) # 59 duplicate entries (32 of which are)
 ```
 - 198 unique userids
 
 ```{r MSc Experiment}
-# read in and wrangle data
+# read in and wrangle data ####
 pg_exp <- read_csv(here("data", "experiment", "MSc Experiment March 13, 2024_15.25.csv"), col_names = T) %>%
   clean_names() %>% # put names in snake_case
   filter(distribution_channel == "anonymous") %>% # filter for actual ppt data
@@ -333,9 +350,30 @@ pg_exp <- read_csv(here("data", "experiment", "MSc Experiment March 13, 2024_15.
   mutate(
     userid = paste0(id_1, id_2, id_3, id_4, id_5),
     .before = 1
-  )
+  ) %>% 
+  filter(progress >= 87) # filter for completion rate > 87% (Jordana's cutoff) - everyone is above this
 
 # skim
 skim(pg_exp)
+
+# check for duplicate entries ####
+pg_exp %>% 
+  count(userid) %>% 
+  filter(n>1) %>% 
+  summarise(sum(n)) # no duplicate entries
 ```
 - 27 unique userids (looks good)
+
+# Merging data
+
+## MSc
+```{r}
+
+```
+
+
+## UG
+```{r}
+
+```
+
