@@ -1,0 +1,19 @@
+```{r loading packages and data}
+# loading packages
+library(tidyverse) # for general data analysis
+library(here) # enables relative file paths
+library(haven) # for reading in foreign (e.g. Stata) file formats
+library(skimr) # provides extensive set of summary stats
+library(janitor) # for making nice variable names (snake_case)
+library(ggthemes) # for accessing more themes
+library(styler) # makes sure code conforms to tidyverse style guidelines
+library(countrycode) # for getting regions of countries
+
+# load data
+
+```
+
+```{r}
+
+```
+
