@@ -12,18 +12,21 @@ library(countrycode) # for getting regions of countries
 
 ## cleaned stata data - we want to create something similar in r
 stata_cleaned <- read_dta(here("stata", "UG_Cleaned_Dataset.dta"))
+
+# read in list of userid replacements
+id_replacements <- read_csv(here("data", "id_replacements.csv"))
 ```
 
 ```{r skimming data}
 skim(stata_cleaned)
 ```
 
-# Clearning data
+# Cleaning data
 
-## Survey Data
-```{r UG Survey}
+## Combined Survey Data
+```{r PG + UG Survey}
 # read in and wrangle data ####
-ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.24.csv")) %>% # this one has more rows than one from Feb, so I assume it's the right one
+survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.24.csv")) %>% # this one has more rows than one from Feb, so I assume it's the right one
   clean_names() %>% # put names in snake_case
   filter(distribution_channel == "anonymous") %>% # filter for actual ppt data
   type_convert() %>% # let tidyverse guess variable types - does pretty good job
@@ -80,6 +83,9 @@ ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.2
     userid = paste0(id_1, id_2, id_3, id_4, id_5), # create unique userid for merging
     .before = 1
   ) %>%
+  relocate(
+    c(id_1:id_5), .after = user_language
+  ) %>% 
   mutate(
     consent = ifelse(consent == "Do not use my anonymised activity in the study.", "no", "yes")
   ) %>%
@@ -87,7 +93,7 @@ ug_survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.2
   select(-c(interviews)) # drop variable for interviews
 
 # q14 recoding- entrepreneurial experience ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     # entrepreneurial exposure – narrower
     entxn = ifelse(entexp %in% c(
@@ -106,7 +112,7 @@ ug_survey <- ug_survey %>%
   )
 
 # q16 recoding - Exposure to entrepreneurship ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     # entrepreneurial exposure – narrower
     xposen = ifelse(xposent %in% c(
@@ -127,7 +133,7 @@ ug_survey <- ug_survey %>%
   )
 
 # q17 recoding - Programme ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     programme = case_when( # create variable for programme
       prog == "A programme at the Business School." ~ "Business programme at the business school",
@@ -143,7 +149,7 @@ ug_survey <- ug_survey %>%
   )
 
 # q21-23 recoding - creative self-efficacy (CSE) ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     across(c(cse1:cse3), ~ factor(.,
       levels = c(
@@ -163,7 +169,7 @@ ug_survey <- ug_survey %>%
   )
 
 # q26-28 recoding - personal innovativeness ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     across(c(pinno1:pinno3), ~ factor(.,
       levels = c(
@@ -183,7 +189,7 @@ ug_survey <- ug_survey %>%
   )
 
 # q31-39 - pragmatic, moral and cognitive legitimacy ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     across(c(pl1:ml3), ~ factor(.,
       levels = c(
@@ -206,7 +212,7 @@ ug_survey <- ug_survey %>%
 
 
 # q40 recoding - Frequency of GenAI use ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     frequentuser = ifelse(frequse %in% c(
       "Once or more each day.",
@@ -218,7 +224,7 @@ ug_survey <- ug_survey %>%
   )
 
 # q41-43 recoding - Frequency of GenAI use: Planning, Professional and Academic ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     across(c(useplan:useacad), ~ factor(.,
       levels = c(
@@ -234,38 +240,38 @@ ug_survey <- ug_survey %>%
   )
 
 # q46-48 recoding - self efficacy: confidence, mastery and expectations ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   mutate(
     selfefficacy = rowMeans(across(c(se1:se3)), na.rm = TRUE), # create variable for self efficacy
     .after = se3
   ) # Note: didn't need to code as factor first because was already numeric
 
 # q51 recoding - age - TBD ####
-skim(ug_survey$ageoriginal) # ranges from 18-44
+skim(survey$ageoriginal) # ranges from 18-44
 
-ug_survey %>%
+survey %>%
   count(ageoriginal) %>%
   arrange(desc(ageoriginal)) %>%
   # filter(n >= 5) %>%
 
   filter(n > 5) %>%
-  summarise(sum(n) / n_distinct(ug_survey$response_id))
+  summarise(sum(n) / n_distinct(survey$response_id))
 
 # filter(ageoriginal>21) %>%
 # filter(n >= 5) %>%
 
 # q52 recoding - hscountry####
-ug_survey %>%
+survey %>%
   count(hscountry) %>%
   arrange(desc(n)) %>%
   # filter(n > 5) %>%
   filter(n <= 5) %>%
-  summarise(sum(n) / n_distinct(ug_survey$response_id))
+  summarise(sum(n) / n_distinct(survey$response_id))
 
 # filter(ageoriginal>21) %>%
 # filter(n >= 5) %>%
 
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   group_by(hscountry) %>%
   mutate(
     hscountry = case_when(
@@ -286,34 +292,32 @@ ug_survey <- ug_survey %>%
   )
 
 # check for duplicate entries ####
-ug_survey %>%
+survey %>%
   count(userid) %>%
   filter(n > 1) %>%
   summarise(sum(n) - n()) # 12 duplicate entries
 
-ug_survey %>%
+survey %>%
   group_by(userid) %>%
   filter(n() > 1) %>%
   arrange(desc(userid))
 
 # For each duplicate, keep the most recent entry ####
-ug_survey <- ug_survey %>%
+survey <- survey %>%
   group_by(userid) %>%
   slice_max(order_by = start_date) %>% # removed 12 duplicate entries
   ungroup()
 
 # see how many obs fall into each date?
-ug_survey %>%
+survey %>%
   count(as.Date(start_date)) # most fall during Jan 31st (151), Feb 1st (18) and March 23rd (23)
 ```
-
 - *Age:* There are 14 ages (*26 obs ~ 11% of data*) which have five or fewer observations, ranging from 18-44. The vast majority of respondents (*89.3%*) are between 21-24 inclusive, so perhaps we could add a category for < 21 (*2% of ppts*) and >24 (*8.7% of ppts*)? Alternatively, I often see surveys/reports that group people into the categories:
   - 18-24 (*91.3% of our ppts*)
   - 25-34 (*6.2% of our ppts*)
   - 35-44 (*2.5% of our ppts*)
   
 - *HS Country:* There are 31 countries (*51 obs ~ 21% of data*) which have five or fewer observations. The vast majority of respondents (*~79%*) are from just four countries: China (*46%*), the UK (*27%*), India (*3%*) and the US (*3%*).
-
 
 ## Experiment Data
 ```{r UG Experiment}
@@ -415,9 +419,10 @@ ug_exp <- read_csv(here("data", "experiment", "Submission_February 14, 2024_15.4
   ) %>%
   mutate(
     userid = tolower(paste0(id_1, id_2, id_3, id_4, id_5)),
+    year = "ug", # add year variable for merging
     .before = 1
   ) %>%
-  filter(progress >= 87 & userid != "nanananana") # filter for completion rate > 87% (Jordana's cutoff); filter out 9 obs which have no data
+  filter(progress >= 87 & start_date > "2024-02-07 09:00:00") # filter for completion rate > 87% (Jordana's cutoff) and for observations after Feb 7th @ 9
 
 # skim
 skim(ug_exp)
@@ -440,9 +445,11 @@ ug_exp %>%
 
 # check comprehension ####
 ug_exp %>%
-  count(comprehension) # 33 participants failed check
+  count(t1_check) # 33 failed first
+
+ug_exp %>%
+  count(t2_check) # 102 failed the second
 ```
-- 33 ppts failed comprehension check
 
 ```{r MSc Experiment}
 # read in and wrangle data ####
@@ -528,6 +535,7 @@ pg_exp <- read_csv(here("data", "experiment", "MSc Experiment March 13, 2024_15.
   ) %>%
   mutate(
     userid = tolower(paste0(id_1, id_2, id_3, id_4, id_5)),
+    year = "pg", # add year variable for merging
     .before = 1
   ) %>%
   filter(progress >= 87 & start_date > "2024-03-11 09:00:00") # filter for completion rate > 87% (Jordana's cutoff) and for entries after March 11th after 9am
@@ -547,21 +555,76 @@ pg_exp %>%
 
 # check comprehension ####
 pg_exp %>%
-  count(comprehension) # two participants failed check
+  count(t1_check) # two failed first
 
-colnames(pg_exp)
-
-as.list(pg_exp[1, ])
+pg_exp %>%
+  count(t2_check) # 12 failed the second
 ```
-- two ppts failed comprehension check
 
 # Merging data
 
-## PG
+## Experiment
 ```{r}
+# merge
+exp_merged <- ug_exp %>%
+  full_join(pg_exp) %>% 
+  relocate(questions_cont, .after = questions) %>% 
+  relocate(t2_log_cont, .after = t2_log)
+
+# skim
+skim(exp_merged)
+
+# write to RDS and CSV
+write_csv(exp_merged, here("data", "exp_merged.csv"))
+write_rds(exp_merged, here("data", "exp_merged.rds"))
+
+exp_merged %>% 
+  filter(userid == "ls16la")
 ```
 
+## Everything
 
-## UG
 ```{r}
+# how many unique variables between survey and exp data?
+union(names(exp_merged), names(survey)) %>%
+                      length()  # 157 unique variables
+
+# create list of matching userids
+exp_merged_mathed <- exp_merged %>% 
+  mutate(userid = ifelse(userid == id_replacements$experiment, id_replacements$survey, userid))
+
+exp_merged_mathed %>% filter(userid == "ae04hf")
+
+exp_merged %>% filter(userid == "as04hf")
+
+exp_merged$userid == exp_merged_mathed$userid
+
+# left join the survey with experiment data
+df_merged_matched <- df_merged <- exp_merged %>% 
+  left_join(survey)
+
+# write to RDS and CSV
+write_csv(exp_merged, here("data", "df_merged.csv"))
+write_rds(exp_merged, here("data", "df_merged.rds"))
 ```
+- final dataset has 218 obs of 157 vars
+
+```{r}
+id_replacements <- tibble(
+  survey = c("ad10sd", "ae04hf", "bl14ja", "cg19lo", "ch04ja", 
+             "js03hj", "js06zm", "ks05hn", "lc22bj", "rs12ys", 
+             "sc24hs", "sc02lj", "sx06yd", "ts14qj", "wz04qj", 
+             "xl24lj", "yh19yf", "ys27hj", "ys09hj", "yw11lj", 
+             "yz12sj", "yz14yo", "sx19sm", "cd09re", "zw20jj", 
+             "yj28sa", "kd27nj", "jl10mn", "js16la"),
+  experiment = c("ad10sd", "as04hf", "bl14ha", "wg19lo", "ch04jm", 
+                 "jh03hj", "js06jm", "kt05hn", "lz22bj", "rs12ws", 
+                 "sc24ho", "sc02hj", "sx06md", "tt14qj", "wj04qj", 
+                 "xa24lj", "th19yf", "ys27lj", "ys09xj", "jw11lj", 
+                 "yz06sj", "yz14to", "sx19sm", "cd09rn", "zw20jd", 
+                 "yj28za", "kn27nj", "jp10mn", "ls16la")
+)
+
+write_csv(id_replacements, here("data", "id_replacements.csv"))
+```
+
