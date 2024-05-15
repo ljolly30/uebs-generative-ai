@@ -10,10 +10,11 @@ library(styler) # makes sure code conforms to tidyverse style guidelines
 library(countrycode) # for getting regions of countries
 
 # load data
-
+df_full <- read_rds(here("data", "full", "df_full.rds"))
 ```
 
 ```{r}
-
+df_full %>% 
+  select()
 ```
 

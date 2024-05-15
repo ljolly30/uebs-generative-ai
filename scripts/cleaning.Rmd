@@ -84,8 +84,9 @@ survey <- read_csv(here("data", "survey", "Survey - GenAI_March 13, 2024_15.24.c
     .before = 1
   ) %>%
   relocate(
-    c(id_1:id_5), .after = user_language
-  ) %>% 
+    c(id_1:id_5),
+    .after = user_language
+  ) %>%
   mutate(
     consent = ifelse(consent == "Do not use my anonymised activity in the study.", "no", "yes")
   ) %>%
@@ -310,7 +311,7 @@ survey <- survey %>%
 
 # see how many obs fall into each date?
 survey %>%
-  count(as.Date(start_date)) # most fall during Jan 31st (151), Feb 1st (18) and March 23rd (23)
+  count(start_date = as.Date(start_date)) # most fall during Jan 31st (151), Feb 1st (18) and March 23rd (23)
 
 skim(survey)
 ```
@@ -569,14 +570,20 @@ pg_exp %>%
 ```{r}
 # merge
 exp_merged <- ug_exp %>%
-  full_join(pg_exp) %>% 
-  relocate(questions_cont, .after = questions) %>% 
+  full_join(pg_exp) %>%
+  relocate(questions_cont, .after = questions) %>%
   relocate(t2_log_cont, .after = t2_log)
 
+# make year a factor
+exp_merged <- exp_merged %>%
+  mutate(
+    year = factor(year)
+  )
+
 # save new variable which has closely matched userids
-exp_merged <- exp_merged %>% 
-  left_join(id_replacements, by = c("userid" = "experiment")) %>% 
-  relocate(survey, .after = userid) %>% 
+exp_merged <- exp_merged %>%
+  left_join(id_replacements, by = c("userid" = "experiment")) %>%
+  relocate(survey, .after = userid) %>%
   mutate(
     userid_matched = ifelse(is.na(survey), userid, survey),
     .after = survey
@@ -590,8 +597,8 @@ skim(exp_merged)
 
 ```{r}
 # find common variable names
-vars_common <- data.frame(var = intersect(names(exp_merged), names(survey))) %>%  # will need to gives these unique ids
-  filter(!(var %in% c("userid", "distribution_channel", "user_language"))) %>% 
+vars_common <- data.frame(var = intersect(names(exp_merged), names(survey))) %>% # will need to gives these unique ids
+  filter(!(var %in% c("userid", "distribution_channel", "user_language"))) %>%
   as_vector()
 
 # exclude constant values
@@ -599,37 +606,38 @@ vars_common <- c("start_date", "end_date", "status", "progress", "duration_s", "
 
 # rename survey vars
 survey <- survey %>%
-  rename_with(.cols = all_of(vars_common), .fn = ~paste0(., "_s"))
+  rename_with(.cols = all_of(vars_common), .fn = ~ paste0(., "_s"))
 
 # rename exp vars
 exp_merged <- exp_merged %>%
-  rename_with(.cols = all_of(vars_common), .fn = ~paste0(., "_e"))  
+  rename_with(.cols = all_of(vars_common), .fn = ~ paste0(., "_e"))
 
 # how many unique variables between survey and exp data?
 union(names(exp_merged), names(survey)) %>%
-                      length()  # 172
+  length() # 172 unique variable names
 
 # left join the survey with experiment data
 df_full <- survey %>%
   rename(
     userid_matched = userid
-  ) %>% 
-  left_join(exp_merged, by = "userid_matched")
+  ) %>%
+  inner_join(exp_merged, by = c("userid_matched", "distribution_channel", "user_language")) %>%
+  relocate(year, .after = 1)
+
+skim(df_full)
 ```
-- final dataset has 218 obs of 157 vars
+- final dataset has 176 obs of 172 vars
 
 ```{r write survey, experiment and full datasets to CSV and RDS}
 # survey
-write_csv(survey, here("data", "survey.csv"))
-write_rds(survey, here("data", "survey.rds"))
+# write_csv(survey, here("data", "survey", "survey.csv"))
+# write_rds(survey, here("data", "survey", "survey.rds"))
 
 # experiment
-write_csv(exp_merged, here("data", "exp_merged.csv"))
-write_rds(exp_merged, here("data", "exp_merged.rds"))
+# write_csv(exp_merged, here("data", "experiment", "exp_merged.csv"))
+# write_rds(exp_merged, here("data", "experiment", "exp_merged.rds"))
 
 # full
-write_csv(df_full, here("data", "df_full.csv"))
-write_rds(df_full, here("data", "df_full.rds"))
+# write_csv(df_full, here("data", "full", "df_full.csv"))
+# write_rds(df_full, here("data", "full", "df_full.rds"))
 ```
-
-
