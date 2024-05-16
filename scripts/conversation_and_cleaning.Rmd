@@ -11,10 +11,35 @@ library(countrycode) # for getting regions of countries
 
 # load data
 df_full <- read_rds(here("data", "full", "df_full.rds"))
+
+
 ```
 
 ```{r}
-df_full %>% 
-  select()
-```
+# select variables of interest
+convos <- df_full %>% 
+  select(c(userid_matched, year, t2_log)) %>% 
+  arrange(year)
+
+# see what an example log looks like
+convos[[2,3]]
+
+# transform
+test <- convos %>% 
+  separate_rows(t2_log, sep = "\n") %>% 
+  mutate(
+    type = if_else(str_starts(t2_log, "ChatGPT"), "output", "prompt")
+  ) %>% 
+  group_by(userid_matched) %>% 
+  mutate(pair_id = cumsum(type == "prompt")) %>% 
+  pivot_wider(
+    names_from = type,
+    values_from = t2_log
+  ) %>% 
+  select(userid_matched, prompt, output)
+
+test <- convos %>%
+  separate_rows(t2_log, sep = "\n") %>%
+  group_by(userid_matched) %>% 
+  add_row(userid_matched = first(userid_matched), t2_log = "User")
 
