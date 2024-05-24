@@ -11,35 +11,127 @@ library(countrycode) # for getting regions of countries
 
 # load data
 df_full <- read_rds(here("data", "full", "df_full.rds"))
-
-
 ```
 
 ```{r}
 # select variables of interest
-convos <- df_full %>% 
-  select(c(userid_matched, year, t2_log)) %>% 
+convos <- df_full %>%
+  select(c(userid_matched, year, t2_log)) %>%
   arrange(year)
 
 # see what an example log looks like
-convos[[2,3]]
+convos[[2, 3]]
 
-# transform
-test <- convos %>% 
-  separate_rows(t2_log, sep = "\n") %>% 
+# split the convsersation data into rows
+convos <- convos %>%
+  separate_rows(t2_log, sep = "\n")
+
+# create function where the default 'type' is "prompt"; this changes to "output" when a row starts with "ChatGPT" and back to "prompt" when a row starts with "User"
+assign_type <- function(t2_log) {
+  type <- rep("prompt", length(t2_log))
+  current_type <- "prompt"
+
+  for (i in seq_along(t2_log)) {
+    if (startsWith(t2_log[i], "ChatGPT")) {
+      current_type <- "output"
+    } else if (t2_log[i] == "User") {
+      current_type <- "prompt"
+    }
+    type[i] <- current_type
+  }
+
+  return(type)
+}
+
+# apply function to dataset
+convos <- convos %>%
+  group_by(userid_matched) %>%
+  mutate(type = assign_type(t2_log)) %>%
+  ungroup()
+
+# check that results look normal
+convos %>%
+  group_by(userid_matched) %>%
+  count(type)
+
+# looks like not all user prompts are labeled "User"; some take the unique username of the user
+# filter for convos which don't feature "User" or "ChatGPT"
+convos %>%
+  group_by(userid_matched) %>%
+  filter(!any(t2_log == "User")) %>%
+  ungroup() %>%
+  distinct(userid_matched) # there are 33 userids whose logs don't feature the word "User" or "ChatGPT"
+
+# filter for convos which don't feature "ChatGPT"
+convos %>%
+  group_by(userid_matched) %>%
+  filter(!any(t2_log == "ChatGPT")) %>%
+  ungroup() %>%
+  distinct(userid_matched) # there are 15 userids whose logs don't feature the word "ChatGPT"
+```
+
+```{r testing}
+# testing out whether changes have applied
+(test <- convos %>%
+  filter(userid_matched == "zj28jd"))
+```
+
+```{r}
+# fix instances where "User" was substituted with their initials
+convos <- convos %>%
   mutate(
-    type = if_else(str_starts(t2_log, "ChatGPT"), "output", "prompt")
-  ) %>% 
-  group_by(userid_matched) %>% 
-  mutate(pair_id = cumsum(type == "prompt")) %>% 
-  pivot_wider(
-    names_from = type,
-    values_from = t2_log
-  ) %>% 
-  select(userid_matched, prompt, output)
+    t2_log = case_when(
+      t2_log == "HJ" ~ "User",
+      t2_log == "You" ~ "User",
+      t2_log == "AM" ~ "User",
+      t2_log == "User:" ~ "User",
+      t2_log == "KL" ~ "User",
+      .default = t2_log
+    )
+  )
 
-test <- convos %>%
-  separate_rows(t2_log, sep = "\n") %>%
-  group_by(userid_matched) %>% 
-  add_row(userid_matched = first(userid_matched), t2_log = "User")
+# fix instances where "ChatGPT" was missing from log
+convos <- convos %>% 
+  mutate(
+    t2_log = case_when(
+    str_detect(t2_log, "Business Plan Builder") & userid_matched == "zg10pj" ~ "ChatGPT Business Plan Builder",
+    str_detect(t2_log, "That sounds like an exciting opportunity!") & userid_matched == "xn05ja" ~ paste("ChatGPT", t2_log),
+    .default = t2_log
+    )
+  )
+
+# re-apply function to dataset
+convos <- convos %>%
+  group_by(userid_matched) %>%
+  mutate(type = assign_type(t2_log)) %>%
+  ungroup()
+
+# manually fix instances where prompts were mislabelled as outputs, or vice versa
+convos <- convos %>%
+  #filter(userid_matched == "hj04jd") %>%
+  mutate(
+    type = 
+      case_when(
+    str_detect(t2_log, "can you give me some advice on my proposal below") & userid_matched == "hj04jd" ~ "prompt",
+    str_detect(t2_log, "any suggestion for the idea") & userid_matched == "hj04jd" ~ "prompt",
+    str_detect(t2_log, "write a business proposal") & userid_matched == "wz28xa" ~ "prompt",
+    str_detect(t2_log, "Ok, now I want to write a business proposal") & userid_matched == "xz25zn" ~ "prompt",
+    str_detect(t2_log, "Do you think is there any others stratgies i") & userid_matched == "zj28jd" ~ "prompt",
+    str_detect(t2_log, "could you give me a example of the strategy") & userid_matched == "zj28jd" ~ "prompt",
+    str_detect(t2_log, "Do you think should i make my") & userid_matched == "zj28jd" ~ "prompt",
+    str_detect(t2_log, "Is there any specific points i") & userid_matched == "zj28jd" ~ "prompt",
+    userid_matched %in% c("bl14ja", "ch04ja", "ms19wa", "rs12ys", "sb30la", "sx19sm", "ys27hj") ~ "output",
+    .default = type
+  ))
+
+# get rid of blank rows
+convos <- convos %>%
+  filter(trimws(t2_log) != "" & !is.na(t2_log))
+```
+
+
+```{r}
+# save final dataset to CSV and RDS
+
+```
 

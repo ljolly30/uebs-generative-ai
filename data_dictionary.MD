@@ -6,14 +6,16 @@
 
 `survey`: All survey data from consenting UG/PG participants who completed 87% or more of the tasks.
 
-`id_replacements`: discrepant survey/experiment userids which were manually matched 
+`id_replacements`: Discrepant survey/experiment userids which were manually matched
+
+`convos`: Dataset where each observation corresponds corresponds to a user ID along with one prompt and the corresponding ChatGPT output (if available)
 
 # Merged Files
 
 `state_cleaned`: Jordana's .dta file with merged experiment and survey data
 
-`exp_merged`: merger of UG and PG experiment data, with discrepant survey/exp userids matched
+`exp_merged`: Merger of UG and PG experiment data, with discrepant survey/exp userids matched
 
-`df_full`: merger of all survey and experiment data
+`df_full`: Merger of all survey and experiment data
 
 
