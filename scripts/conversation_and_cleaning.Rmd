@@ -127,11 +127,16 @@ convos <- convos %>%
 # get rid of blank rows
 convos <- convos %>%
   filter(trimws(t2_log) != "" & !is.na(t2_log))
+
+# get rid of user columns, now that we've recoded them
+convos <- convos %>%
+  filter(t2_log != "User")
 ```
 
 
 ```{r}
 # save final dataset to CSV and RDS
-
+write_csv(convos, here("data", "convos", "convos.csv"))
+write_rds(convos, here("data", "convos", "convos.rds"))
 ```
 
