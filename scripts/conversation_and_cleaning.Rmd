@@ -8,6 +8,7 @@ library(janitor) # for making nice variable names (snake_case)
 library(ggthemes) # for accessing more themes
 library(styler) # makes sure code conforms to tidyverse style guidelines
 library(countrycode) # for getting regions of countries
+library(ggpubr) # for making publication-ready plots
 
 # load data
 df_full <- read_rds(here("data", "full", "df_full.rds"))
@@ -73,7 +74,7 @@ convos %>%
 ```{r testing}
 # testing out whether changes have applied
 (test <- convos %>%
-  filter(userid_matched == "zj28jd"))
+  filter(userid_matched == "ad10sd"))
 ```
 
 ```{r}
@@ -131,12 +132,106 @@ convos <- convos %>%
 # get rid of user columns, now that we've recoded them
 convos <- convos %>%
   filter(t2_log != "User")
+
+# aggregate each group of consecutive prompts into a one row
+convos <- convos %>%
+    group_by(userid_matched) %>%
+    mutate(
+      # Create a grouping variable that changes whenever the type is not 'prompt' or the previous type is not 'prompt'
+      group = cumsum(type != "prompt" | lag(type, default = first(type)) != "prompt")
+    ) %>%
+    group_by(userid_matched, group) %>%
+    summarise(
+      year = first(year),
+      t2_log = if(first(type) == "prompt") paste(t2_log, collapse = " ") else first(t2_log),
+      type = first(type),
+      .groups = 'drop'
+    ) %>% 
+  select(-group)
+
+# aggregate each group of consecutive outputs into one row
+convos <- convos %>% 
+  group_by(userid_matched) %>%
+    mutate(
+      # Create a grouping variable that changes whenever the type is not 'prompt' or the previous type is not 'prompt'
+      group = cumsum(type != "output" | lag(type, default = first(type)) != "output")
+    ) %>%
+    group_by(userid_matched, group) %>%
+    summarise(
+      year = first(year),
+      t2_log = if(first(type) == "output") paste(t2_log, collapse = " ") else first(t2_log),
+      type = first(type),
+      .groups = 'drop'
+    ) %>% 
+  select(-group)
+
+# pivot the dataset so that each prompt corresponds to an output
+convos <- convos %>%
+    group_by(userid_matched) %>%
+    mutate(
+      # Create an ID to pair each prompt with its corresponding output
+      pair_id = cumsum(type == "prompt")
+    ) %>%
+    pivot_wider(
+      names_from = type,
+      values_from = t2_log
+    ) %>%
+    ungroup() %>%
+    select(userid_matched, year, prompt, output)
+
+# skim datatset
+skim(convos)
+
+# check that counts look okay
+convos %>%
+  group_by(userid_matched) %>% 
+  summarise(first = first(type)) %>% 
+  filter(first == "output")
+```
+
+```{r}
+# summarize the number of prompts any given user used
+(convo_ss <- convos %>% 
+  group_by(userid_matched, year) %>% 
+  summarise(
+    n_prompts = sum(!is.na(prompt)),
+    n_outputs = sum(!is.na(output))
+  ))
+
+# plot the number of prompts per user
+ggplot(convo_ss, aes(x = n_prompts)) +
+  geom_histogram(binwidth = 1, color = "white") +
+  labs(
+    x = "\n# of prompts per user",
+    y = "Count\n"
+  ) +
+  scale_x_continuous(n.breaks = 8) +
+  theme_pubr()
+
+# plot the number of outputs per user
+ggplot(convo_ss, aes(x = n_outputs)) +
+  geom_histogram(binwidth = 1, color = "blue", alpha = 0.5)+
+  geom_histogram(aes(x = n_prompts), binwidth = 1, color = "red", alpha = 0.1) +
+  labs(
+    x = "\n# of prompts per user",
+    y = "Count\n"
+  ) +
+  scale_x_continuous(n.breaks = 8) +
+  theme_pubr()
 ```
 
 
+In total, 10 users started with an output and the remaining 166 with a prompt
+
+608 total prompts across 176 users
+
 ```{r}
-# save final dataset to CSV and RDS
+# save full convos dataset to CSV and RDS
 write_csv(convos, here("data", "convos", "convos.csv"))
 write_rds(convos, here("data", "convos", "convos.rds"))
+
+# save summary stats dataset
+write_csv(convos, here("data", "convo_ss", "convos_ss.csv"))
+write_rds(convos, here("data", "convo_ss", "convos_ss.rds"))
 ```
 
